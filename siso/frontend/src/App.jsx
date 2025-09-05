@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { MessageCircle, Bot, Rocket } from 'lucide-react'
 import SplashScreen from './components/SplashScreen.jsx'
 import OnboardingScreen from './components/OnboardingScreen.jsx'
 import Dashboard from './components/Dashboard.jsx'

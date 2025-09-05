@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Zap, MessageCircle, Bot, Rocket, Plus, Bitcoin } from 'lucide-react'
+import { MessageCircle, Bot, Rocket} from 'lucide-react'
 import SplashScreen from './SplashScreen'
 import OnboardingScreen from './OnboardingScreen'
 import Dashboard from './Dashboard'
