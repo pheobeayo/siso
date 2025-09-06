@@ -2,7 +2,7 @@
 
 ## Overview
 
-[Siso](https://zapbase.onrender.com) enables users to **initiate Ethereum transactions** using **voice commands**. The system integrates a smart contract that maps **basenames** (e.g., `alice.base.eth`) to wallet addresses, enabling secure and seamless voice-triggered asset transfers aligned with the theme of **Next Generation of Autonomous Businesses**. Our focus is on leveraging AI and blockchain technologies to create impactful and scalable solutions.
+[Siso]() enables users to **initiate Ethereum transactions** using **voice commands**. The system integrates a smart contract that maps **basenames** (e.g., `alice.base.eth`) to wallet addresses, enabling secure and seamless voice-triggered asset transfers aligned with the theme of **Next Generation of Autonomous Businesses**. Our focus is on leveraging AI and blockchain technologies to create impactful and scalable solutions.
 This application enables users to:
 
 - 🎤 **Use voice commands** like “Send 0.01 ETH to jane.base.eth”  
@@ -19,7 +19,7 @@ Access the Telegram bot [here](https://t.me/myUXCrushbot)
 
 To check the app is running, you can ping: you will get the response `Bot is running.`
 
-[*https://t-mini-app.onrender.com/health*](https://t-mini-app.onrender.com/health)
+[**]()
 
 
 ### Basename Resolution Smart Contract
@@ -161,8 +161,7 @@ curl -X GET http://localhost:9000/health
 
 ### Team
 -  [Blessing Chika](https://www.linkedin.com/in/blessingchika) - Product Manager
-- [Allan Robinson K G](https://github.com/Githaiga22)  - Frontend Dev
-- [Kenneth Njoroge](https://github.com/kenkomu/) - AI Dev
-- [Fred Gitonga](https://github.com/FredMunene) - Backend Dev
-- [Marreyharm]() - Designer
+- [Anuoluwapo Ali](https://github.com/Anuoluwapo25/)  - AI/Smart Contract Dev
+- [Ifeoluwa Sanni](https://github.com/pheobeayo/) - Frontend
+
 
