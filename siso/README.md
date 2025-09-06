@@ -2,7 +2,7 @@
 
 ## Overview
 
-[Siso]() enables users to **initiate Ethereum transactions** using **voice commands**. The system integrates a smart contract that maps **basenames** (e.g., `alice.base.eth`) to wallet addresses, enabling secure and seamless voice-triggered asset transfers aligned with the theme of **Next Generation of Autonomous Businesses**. Our focus is on leveraging AI and blockchain technologies to create impactful and scalable solutions.
+[Siso](https://siso-kohl.vercel.app/) enables users to **initiate Ethereum transactions** using **voice commands**. The system integrates a smart contract that maps **basenames** (e.g., `alice.base.eth`) to wallet addresses, enabling secure and seamless voice-triggered asset transfers aligned with the theme of **Next Generation of Autonomous Businesses**. Our focus is on leveraging AI and blockchain technologies to create impactful and scalable solutions.
 This application enables users to:
 
 - 🎤 **Use voice commands** like “Send 0.01 ETH to jane.base.eth”  
@@ -19,7 +19,7 @@ Access the Telegram bot [here](https://t.me/myUXCrushbot)
 
 To check the app is running, you can ping: you will get the response `Bot is running.`
 
-[**]()
+[*Siso*](https://siso-kohl.vercel.app/)
 
 
 ### Basename Resolution Smart Contract
@@ -72,7 +72,7 @@ Voice recognition is handled externally (e.g., browser or mobile), with text com
 - `/backend`: Source code for website.
 - `/frontend`: Documentation and pitch deck.
 - `/frontend/src/api`: Source code for AI agent.
-- [`ens-asset-sender`](https://github.com/kenkomu/ens-asset-sender) : Source code for Smart contracts.
+
 ---
 ## Front-end
 
