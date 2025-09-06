@@ -1,4 +1,4 @@
-import { Plus, Home, History, Bell, Settings, Send, ReceiptText, ArrowLeft, Mic, RefreshCw } from 'lucide-react'
+import { Plus, Home, History, Bell, Settings, Send, ReceiptText, ArrowLeft, Mic, RefreshCw, Globe } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { ConnectWallet, useAddress, useSigner, useBalance, useContract } from "@thirdweb-dev/react"
 
@@ -7,42 +7,152 @@ function Dashboard({ onNavigate }) {
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [tokenBalances, setTokenBalances] = useState([])
+  const [ethSepoliaBalances, setEthSepoliaBalances] = useState({ native: 0, tokens: [] })
+  const [baseSepoliaBalances, setBaseSepoliaBalances] = useState({ native: 0, tokens: [] })
+  const [ensName, setEnsName] = useState(null)
+  const [baseName, setBaseName] = useState(null)
+  const [selectedNetwork, setSelectedNetwork] = useState('ethereum')
   
   const address = useAddress()
   const signer = useSigner()
   
-  // Get native token balance (ETH)
-  const { data: ethBalance, isLoading: ethLoading } = useBalance()
+  const ALCHEMY_API_KEY = import.meta.env.VITE_ALCHEMY_API_KEY || ''
   
-  // Alchemy API configuration
-  const ALCHEMY_API_KEY = import.meta.env.VITE_ALCHEMY_API_KEY || 'YOUR_ALCHEMY_API_KEY_HERE'
-  const ALCHEMY_URL = `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
-  
-  // Common ERC-20 token contracts (on Ethereum mainnet)
-  const tokenContracts = {
-    USDC: "0xA0b86a33E6441231e9e08c6eA4B6c9F2b5D0F6A0", // Example USDC contract
-    USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT contract
-    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F"   // DAI contract
+  const networks = {
+    ethereum: {
+      name: 'Ethereum Sepolia',
+      symbol: 'ETH',
+      alchemyUrl: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      faucetUrl: 'https://sepoliafaucet.com/',
+      ensResolver: 'https://eth-mainnet.g.alchemy.com/v2/', 
+      tokens: {
+        LINK: "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+        USDC: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", 
+        UNI: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
+      }
+    },
+    base: {
+      name: 'Base Sepolia',
+      symbol: 'ETH',
+      alchemyUrl: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      faucetUrl: 'https://www.alchemy.com/faucets/base-sepolia',
+      baseNameResolver: 'https://base-mainnet.g.alchemy.com/v2/', 
+      tokens: {
+        USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        LINK: "0xE4aB69C077896252FAFBD49EFD26B5D171A32410"
+      }
+    }
   }
 
-  // Get ERC-20 token balances
-  const { contract: usdcContract } = useContract(tokenContracts.USDC)
-  const { contract: usdtContract } = useContract(tokenContracts.USDT)
-
-  // Fetch token balances using Alchemy
-  const fetchTokenBalancesWithAlchemy = async () => {
+  const resolveENSName = async (address) => {
     if (!address || !ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') {
-      console.log("Address or Alchemy API key not available")
-      return
+      return null
+    }
+
+    try {
+      const response = await fetch(`https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_call',
+          params: [
+            {
+              to: '0x3671aE578E63FdF66ad4F3E12CC0c0d71Ac7510C', // ENS Public Resolver
+              data: `0x691f3431${address.slice(2).padStart(64, '0')}` // reverse(bytes32)
+            },
+            'latest'
+          ]
+        })
+      })
+
+      const data = await response.json()
+      if (data.result && data.result !== '0x') {
+        // Decode the result - this is simplified, you might want to use a proper ENS library
+        return null // For now, we'll implement a simpler version
+      }
+    } catch (error) {
+      console.error('Error resolving ENS:', error)
+    }
+    return null
+  }
+
+  const resolveDomainNames = async (address) => {
+    if (!address) return
+
+    try {
+      
+      const mockEnsNames = {
+        '0x1234567890123456789012345678901234567890': 'alice.eth',
+        '0x742d35Cc6634C0532925a3b8D6Ac6E29F0da6a44': 'bob.eth'
+      }
+
+      const mockBaseNames = {
+        '0x1234567890123456789012345678901234567890': 'alice.base.eth',
+        '0x742d35Cc6634C0532925a3b8D6Ac6E29F0da6a44': 'bob.base.eth'
+      }
+
+      if (mockEnsNames[address]) {
+        setEnsName(mockEnsNames[address])
+      }
+
+      if (mockBaseNames[address]) {
+        setBaseName(mockBaseNames[address])
+      }
+
+   
+      
+    } catch (error) {
+      console.error('Error resolving domain names:', error)
+    }
+  }
+
+  const fetchNativeBalance = async (networkKey) => {
+    const network = networks[networkKey]
+    if (!address || !ALCHEMY_API_KEY || ALCHEMY_API_KEY === '') {
+      return 0
+    }
+
+    try {
+      const response = await fetch(network.alchemyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_getBalance',
+          params: [address, 'latest']
+        })
+      })
+
+      const data = await response.json()
+      if (data.result) {
+        const balanceWei = parseInt(data.result, 16)
+        const balanceEth = balanceWei / Math.pow(10, 18)
+        return balanceEth
+      }
+    } catch (error) {
+      console.error(`Error fetching ${networkKey} balance:`, error)
+    }
+    return 0
+  }
+
+  // Fetch token balances for a specific network
+  const fetchTokenBalances = async (networkKey) => {
+    const network = networks[networkKey]
+    if (!address || !ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') {
+      return []
     }
     
-    setLoading(true)
     const balances = []
     
     try {
-      // Get token balances using Alchemy's getTokenBalances method
-      const response = await fetch(ALCHEMY_URL, {
+      const response = await fetch(network.alchemyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -53,7 +163,7 @@ function Dashboard({ onNavigate }) {
           method: 'alchemy_getTokenBalances',
           params: [
             address,
-            Object.values(tokenContracts)
+            Object.values(network.tokens)
           ]
         })
       })
@@ -62,60 +172,95 @@ function Dashboard({ onNavigate }) {
       
       if (data.result && data.result.tokenBalances) {
         for (const tokenBalance of data.result.tokenBalances) {
-          if (tokenBalance.tokenBalance !== '0x0') {
+          if (tokenBalance.tokenBalance && tokenBalance.tokenBalance !== '0x0') {
             // Get token metadata
-            const metadataResponse = await fetch(ALCHEMY_URL, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'alchemy_getTokenMetadata',
-                params: [tokenBalance.contractAddress]
+            try {
+              const metadataResponse = await fetch(network.alchemyUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 2,
+                  method: 'alchemy_getTokenMetadata',
+                  params: [tokenBalance.contractAddress]
+                })
               })
-            })
 
-            const metadata = await metadataResponse.json()
-            
-            if (metadata.result) {
-              const balance = parseInt(tokenBalance.tokenBalance, 16) / Math.pow(10, metadata.result.decimals)
+              const metadata = await metadataResponse.json()
               
-              balances.push({
-                symbol: metadata.result.symbol,
-                balance: balance.toFixed(2),
-                contract: tokenBalance.contractAddress,
-                name: metadata.result.name
-              })
+              if (metadata.result) {
+                const balance = parseInt(tokenBalance.tokenBalance, 16) / Math.pow(10, metadata.result.decimals || 18)
+                
+                balances.push({
+                  symbol: metadata.result.symbol || 'UNKNOWN',
+                  balance: balance.toFixed(6),
+                  contract: tokenBalance.contractAddress,
+                  name: metadata.result.name || 'Unknown Token',
+                  network: networkKey
+                })
+              }
+            } catch (metaError) {
+              console.error('Error fetching token metadata:', metaError)
             }
           }
         }
       }
-
-      setTokenBalances(balances)
     } catch (error) {
-      console.error("Error fetching token balances with Alchemy:", error)
-      setError("Failed to fetch token balances")
-    } finally {
-      setLoading(false)
+      console.error(`Error fetching ${networkKey} token balances:`, error)
     }
+    
+    return balances
   }
 
-  // Fetch transaction history using Alchemy
-  const fetchTransactionHistory = async () => {
-    if (!address || !ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') {
-      console.log("Address or Alchemy API key not available")
-      setError("Alchemy API key required for transaction history")
-      return
-    }
+  const fetchAllBalances = async () => {
+    if (!address) return
     
     setLoading(true)
     setError(null)
     
     try {
-      // Get asset transfers (both incoming and outgoing)
-      const response = await fetch(ALCHEMY_URL, {
+      console.log('Fetching balances for address:', address)
+      
+      const [ethNative, ethTokens] = await Promise.all([
+        fetchNativeBalance('ethereum'),
+        fetchTokenBalances('ethereum')
+      ])
+      
+      const [baseNative, baseTokens] = await Promise.all([
+        fetchNativeBalance('base'),
+        fetchTokenBalances('base')
+      ])
+      
+      console.log('ETH Sepolia - Native:', ethNative, 'Tokens:', ethTokens)
+      console.log('Base Sepolia - Native:', baseNative, 'Tokens:', baseTokens)
+      
+      setEthSepoliaBalances({ native: ethNative, tokens: ethTokens })
+      setBaseSepoliaBalances({ native: baseNative, tokens: baseTokens })
+      
+      // Resolve domain names
+      await resolveDomainNames(address)
+      
+    } catch (error) {
+      console.error("Error fetching balances:", error)
+      setError("Failed to fetch balances: " + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch transaction history
+  const fetchTransactionHistory = async () => {
+    if (!address || !ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') {
+      setError("Alchemy API key required for transaction history")
+      return
+    }
+    
+    const network = networks[selectedNetwork]
+    
+    try {
+      const response = await fetch(network.alchemyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -129,174 +274,97 @@ function Dashboard({ onNavigate }) {
             toBlock: 'latest',
             fromAddress: address,
             category: ['external', 'token'],
-            maxCount: '0x14', // Get last 20 transactions
+            maxCount: '0xa',
             order: 'desc'
           }]
         })
       })
 
-      const fromData = await response.json()
-
-      // Get incoming transfers
-      const toResponse = await fetch(ALCHEMY_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'alchemy_getAssetTransfers',
-          params: [{
-            fromBlock: '0x0',
-            toBlock: 'latest',
-            toAddress: address,
-            category: ['external', 'token'],
-            maxCount: '0x14',
-            order: 'desc'
-          }]
-        })
-      })
-
-      const toData = await toResponse.json()
-
-      // Combine and process transactions
-      const allTransfers = [
-        ...(fromData.result?.transfers || []).map(tx => ({ ...tx, type: 'Sent' })),
-        ...(toData.result?.transfers || []).map(tx => ({ ...tx, type: 'Received' }))
-      ]
-
-      // Sort by block number (most recent first)
-      allTransfers.sort((a, b) => parseInt(b.blockNum, 16) - parseInt(a.blockNum, 16))
-
-      // Process transactions
-      const processedTxs = allTransfers.slice(0, 10).map(tx => {
-        const value = tx.value || 0
-        const symbol = tx.asset || 'ETH'
-        
-        return {
+      const data = await response.json()
+      
+      if (data.result && data.result.transfers) {
+        const processedTxs = data.result.transfers.map(tx => ({
           hash: tx.hash,
-          type: tx.type,
-          amount: parseFloat(value).toFixed(4),
-          address: tx.type === 'Sent' ? tx.to : tx.from,
-          timestamp: new Date(parseInt(tx.metadata?.blockTimestamp || Date.now())).toLocaleDateString(),
-          symbol: symbol,
+          type: 'Sent',
+          amount: parseFloat(tx.value || 0).toFixed(4),
+          address: tx.to,
+          timestamp: new Date().toLocaleDateString(),
+          symbol: tx.asset || network.symbol,
           blockNumber: parseInt(tx.blockNum, 16)
-        }
-      })
-      
-      setTransactions(processedTxs)
-      
+        }))
+        
+        setTransactions(processedTxs.slice(0, 5))
+      }
     } catch (error) {
-      console.error("Error fetching transactions with Alchemy:", error)
-      setError("Failed to fetch transaction history")
-    } finally {
-      setLoading(false)
+      console.error("Error fetching transactions:", error)
     }
   }
 
-  // Alternative method: Get transaction count and latest transactions
-  const fetchTransactionHistoryAlternative = async () => {
-    if (!address || !ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') {
-      setError("Alchemy API key required")
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Get latest block number
-      const latestBlockResponse = await fetch(ALCHEMY_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'eth_blockNumber',
-          params: []
-        })
-      })
-
-      const latestBlockData = await latestBlockResponse.json()
-      const latestBlock = parseInt(latestBlockData.result, 16)
-
-      // Get transaction count
-      const txCountResponse = await fetch(ALCHEMY_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'eth_getTransactionCount',
-          params: [address, 'latest']
-        })
-      })
-
-      const txCountData = await txCountResponse.json()
-      const txCount = parseInt(txCountData.result, 16)
-
-      console.log(`Address ${address} has ${txCount} transactions`)
-
-      // For now, use the asset transfers method as it's more reliable
-      await fetchTransactionHistory()
-
-    } catch (error) {
-      console.error("Error in alternative fetch method:", error)
-      setError("Failed to fetch transaction data")
-      setLoading(false)
-    }
-  }
-
-  // Fetch token balances
+  // Effects
   useEffect(() => {
     if (address) {
-      fetchTokenBalancesWithAlchemy()
+      fetchAllBalances()
     } else {
-      setTokenBalances([])
+      setEthSepoliaBalances({ native: 0, tokens: [] })
+      setBaseSepoliaBalances({ native: 0, tokens: [] })
+      setEnsName(null)
+      setBaseName(null)
     }
   }, [address])
 
-  // Fetch transactions when wallet connects
   useEffect(() => {
     if (address) {
       fetchTransactionHistory()
     } else {
       setTransactions([])
-      setTokenBalances([])
     }
-  }, [address])
+  }, [address, selectedNetwork])
 
-  // Calculate total USD balance (using mock prices)
+  // Calculate total balance (mock USD prices)
   const calculateTotalBalance = () => {
     let total = 0
     
-    // Add ETH balance (mock price $2000)
-    if (ethBalance) {
-      total += parseFloat(ethBalance.displayValue) * 2000
-    }
+    // ETH Sepolia (mock $2000/ETH)
+    total += ethSepoliaBalances.native * 2000
     
-    // Add token balances (assuming stablecoin = $1)
-    tokenBalances.forEach(token => {
-      if (token.symbol === 'USDC' || token.symbol === 'USDT' || token.symbol === 'DAI') {
-        total += parseFloat(token.balance)
-      }
-    })
+    // Base Sepolia ETH (mock $2000/ETH)
+    total += baseSepoliaBalances.native * 2000
     
     return total.toFixed(2)
   }
 
-  // Get current network info
-  const getNetworkInfo = () => {
-    // This would typically come from your web3 provider
-    return 'Ethereum Mainnet'
+  // Get display name (ENS, Base, or shortened address)
+  const getDisplayName = (addr) => {
+    if (!addr) return ''
+    
+    if (ensName && addr.toLowerCase() === address?.toLowerCase()) {
+      return ensName
+    }
+    
+    if (baseName && addr.toLowerCase() === address?.toLowerCase()) {
+      return baseName
+    }
+    
+    return formatAddress(addr)
   }
 
-  // Sign a message to authenticate
+  // Get welcome name - prioritize Base name for the welcome section
+  const getWelcomeName = () => {
+    if (!address) return 'Connect Wallet'
+    
+    // Priority: Base name > ENS name > shortened address
+    if (baseName) {
+      return baseName.replace('.base.eth', '') // Remove .base.eth for cleaner display
+    }
+    
+    if (ensName) {
+      return ensName.replace('.eth', '') // Remove .eth for cleaner display
+    }
+    
+    return formatAddress(address)
+  }
+
+  // Sign message
   const signMessage = async () => {
     if (!signer) {
       console.error("Signer not found")
@@ -304,7 +372,7 @@ function Dashboard({ onNavigate }) {
     }
 
     try {
-      const message = "Sign this message to authenticate with Alchemy-powered wallet on Sepolia testnet"
+      const message = `Sign this message to authenticate with Sepolia testnet`
       const signature = await signer.signMessage(message)
       console.log("Signature:", signature)
       alert("Successfully authenticated with wallet signature!")
@@ -314,7 +382,7 @@ function Dashboard({ onNavigate }) {
     }
   }
 
-  // Shorten wallet address helper
+  // Format address helper
   const formatAddress = (addr) => {
     if (!addr) return ''
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
@@ -333,7 +401,19 @@ function Dashboard({ onNavigate }) {
             />
             <div>
               <p className="text-gray-400 text-sm">Welcome,</p>
-              <p className="font-semibold text-lg">Lissa</p>
+              <div className="flex items-center gap-2">
+                {baseName && (
+                  <Globe className="w-4 h-4 text-blue-400" />
+                )}
+                <p className="font-semibold text-lg">
+                  {getWelcomeName()}
+                </p>
+              </div>
+              {(baseName || ensName) && address && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {formatAddress(address)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -347,23 +427,35 @@ function Dashboard({ onNavigate }) {
               />
             ) : (
               <div>
-                <p className="text-green-400 text-sm mb-1 font-semibold">
-                  {formatAddress(address)}
-                </p>
-                <button
-                  className="bg-green-700 text-white px-3 py-1 rounded-full text-xs font-medium mr-2"
-                  onClick={signMessage}
-                >
-                  Authenticate
-                </button>
-                <button
-                  className="bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium"
-                  onClick={fetchTransactionHistory}
-                  disabled={loading}
-                >
-                  <RefreshCw className={`w-3 h-3 inline mr-1 ${loading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2 mb-1">
+                  {(ensName || baseName) && (
+                    <Globe className="w-4 h-4 text-blue-400" />
+                  )}
+                  <p className="text-green-400 text-sm font-semibold">
+                    {getDisplayName(address)}
+                  </p>
+                </div>
+                {(ensName || baseName) && (
+                  <p className="text-gray-400 text-xs mb-1">
+                    {formatAddress(address)}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    className="bg-green-700 text-white px-3 py-1 rounded-full text-xs font-medium"
+                    onClick={signMessage}
+                  >
+                    Authenticate
+                  </button>
+                  <button
+                    className="bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium"
+                    onClick={fetchAllBalances}
+                    disabled={loading}
+                  >
+                    <RefreshCw className={`w-3 h-3 inline mr-1 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
               </div>
             )}
 
@@ -383,12 +475,47 @@ function Dashboard({ onNavigate }) {
           </div>
         </div>
 
-        {/* API Key Status */}
-        {(!ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') && (
-          <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-3 mb-6">
-            <p className="text-yellow-300 text-sm">
-              ⚠️ Add your Alchemy API key to REACT_APP_ALCHEMY_API_KEY environment variable for real transaction data
+        {/* Network Selector */}
+        <div className="flex gap-2 mb-6">
+          {Object.entries(networks).map(([key, network]) => (
+            <button
+              key={key}
+              onClick={() => setSelectedNetwork(key)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedNetwork === key
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              }`}
+            >
+              {network.name}
+            </button>
+          ))}
+        </div>
+
+        {/* API Key Status & Testnet Info */}
+        {(!ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'YOUR_ALCHEMY_API_KEY_HERE') ? (
+          <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-4 mb-6">
+            <p className="text-yellow-300 text-sm mb-2">
+              ⚠️ <strong>Setup Required:</strong> Add your Alchemy API key to VITE_ALCHEMY_API_KEY environment variable
             </p>
+            <p className="text-yellow-200 text-xs">
+              Get your free API key at: <a href="https://alchemy.com" target="_blank" className="underline">alchemy.com</a>
+            </p>
+          </div>
+        ) : (
+          <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3 mb-6">
+            <p className="text-green-300 text-sm flex items-center gap-2">
+              ✅ Connected to Sepolia Testnets
+              <span className="text-xs bg-green-600 px-2 py-1 rounded">TESTNET</span>
+            </p>
+            <div className="flex gap-4 mt-2 text-xs text-green-200">
+              <a href={networks.ethereum.faucetUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                ETH Sepolia Faucet →
+              </a>
+              <a href={networks.base.faucetUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
+                Base Sepolia Faucet →
+              </a>
+            </div>
           </div>
         )}
 
@@ -406,7 +533,7 @@ function Dashboard({ onNavigate }) {
         {/* Balance Card */}
         <div className="bg-[#0F1729] rounded-3xl p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <p className="text-gray-400">Total Balance</p>
+            <p className="text-gray-400">Total Balance - Both Testnets</p>
             <div className="flex items-center gap-1">
               <span>USD</span>
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -418,27 +545,50 @@ function Dashboard({ onNavigate }) {
           {address ? (
             <>
               <p className="text-4xl font-bold mb-4">
-                {ethLoading || loading ? (
+                {loading ? (
                   <span className="animate-pulse">Loading...</span>
                 ) : (
-                  `$${calculateTotalBalance()}`
+                  <>
+                    <span className="text-2xl text-gray-400">$</span>
+                    {calculateTotalBalance()}
+                    <span className="text-lg text-gray-400 ml-2">(Testnet)</span>
+                  </>
                 )}
               </p>
               
-              {/* Individual Balances */}
-              <div className="space-y-2 mb-4">
-                {ethBalance && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">ETH:</span>
-                    <span>{parseFloat(ethBalance.displayValue).toFixed(4)} ETH</span>
+              {/* Network Balances */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Ethereum Sepolia */}
+                <div className="bg-white/5 rounded-lg p-3">
+                  <h4 className="text-sm font-semibold text-blue-400 mb-2">Ethereum Sepolia</h4>
+                  <div className="text-sm text-gray-300">
+                    ETH: {ethSepoliaBalances.native.toFixed(4)}
                   </div>
-                )}
-                {tokenBalances.map((token, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span className="text-gray-400">{token.symbol}:</span>
-                    <span>{token.balance} {token.symbol}</span>
+                  {ethSepoliaBalances.tokens.map((token, idx) => (
+                    <div key={idx} className="text-xs text-gray-400">
+                      {token.symbol}: {token.balance}
+                    </div>
+                  ))}
+                  {ethSepoliaBalances.tokens.length === 0 && ethSepoliaBalances.native === 0 && (
+                    <div className="text-xs text-gray-500">No tokens found</div>
+                  )}
+                </div>
+
+                {/* Base Sepolia */}
+                <div className="bg-white/5 rounded-lg p-3">
+                  <h4 className="text-sm font-semibold text-purple-400 mb-2">Base Sepolia</h4>
+                  <div className="text-sm text-gray-300">
+                    ETH: {baseSepoliaBalances.native.toFixed(4)}
                   </div>
-                ))}
+                  {baseSepoliaBalances.tokens.map((token, idx) => (
+                    <div key={idx} className="text-xs text-gray-400">
+                      {token.symbol}: {token.balance}
+                    </div>
+                  ))}
+                  {baseSepoliaBalances.tokens.length === 0 && baseSepoliaBalances.native === 0 && (
+                    <div className="text-xs text-gray-500">No tokens found</div>
+                  )}
+                </div>
               </div>
             </>
           ) : (
@@ -446,12 +596,7 @@ function Dashboard({ onNavigate }) {
           )}
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">Network: {getNetworkInfo()}</span>
-            <div className="flex -space-x-1">
-              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">
-                ETH
-              </div>
-            </div>
+            <span className="text-sm text-gray-400">Testnets: ETH Sepolia + Base Sepolia</span>
             {error && (
               <span className="ml-auto text-red-400 text-xs">{error}</span>
             )}
@@ -483,7 +628,7 @@ function Dashboard({ onNavigate }) {
         {/* Recent Transactions */}
         <div className="mb-20 p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold">Recent Transactions</h3>
+            <h3 className="font-semibold">Recent Transactions - {networks[selectedNetwork].name}</h3>
             <button 
               className="text-sm text-gray-400 hover:text-white"
               onClick={fetchTransactionHistory}
@@ -495,23 +640,12 @@ function Dashboard({ onNavigate }) {
           
           {!address ? (
             <p className="text-gray-500 text-center py-8">Connect wallet to view transactions</p>
-          ) : loading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="animate-pulse flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-700"></div>
-                    <div>
-                      <div className="h-4 bg-gray-700 rounded w-20 mb-2"></div>
-                      <div className="h-3 bg-gray-700 rounded w-32"></div>
-                    </div>
-                  </div>
-                  <div className="h-4 bg-gray-700 rounded w-16"></div>
-                </div>
-              ))}
-            </div>
           ) : transactions.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No transactions found</p>
+            <p className="text-gray-500 text-center py-8">
+              No transactions found on {networks[selectedNetwork].name}
+              <br />
+              <span className="text-xs">Get test ETH from faucets above to start testing!</span>
+            </p>
           ) : (
             <div className="space-y-4">
               {transactions.map((transaction, index) => (
@@ -524,7 +658,7 @@ function Dashboard({ onNavigate }) {
                     <div>
                       <p className="font-medium">{transaction.type}</p>
                       <p className="text-sm text-gray-400">
-                        {transaction.type === 'Sent' ? 'To' : 'From'} {formatAddress(transaction.address)}
+                        {transaction.type === 'Sent' ? 'To' : 'From'} {getDisplayName(transaction.address)}
                       </p>
                       <p className="text-xs text-gray-500">{transaction.timestamp}</p>
                     </div>
